@@ -1,0 +1,161 @@
+Bug fixes:
+
+1) same-validator.js:
+
+   same-validator did not correctly handle 15 minute increments for purge times
+   less than one hour.
+
+   // timespec < 1 hour must be in 15-minute increment
+   if (hr < 1) return (mn % 15 === 0);
+
+2) wav.js:
+
+   A volume of zero was not accepted even though the documentation said
+   it was a valid value:
+
+   Added "num0" to the xtype check.
+
+   if (!(xtype.is(volume, 'num0|int+') && volume <= 32767)) {
+     paramErrors.push('volume must be integer 0 <= i <= 32767');
+   }
+
+3) same.js:
+
+   A hyphen was missing from the end of the message. constructMessageByteArray
+   modified to add "-" after sender.
+
+   message.sender,
+     '-'
+
+4) fixtures/same.js:
+
+   Approved by FCC December 14, 2017
+
+   'BLU': 'Blue Alert',
+
+5) fixtures/same.js:
+
+   Approved by FCC July 6, 2016
+
+   'EWW': 'Extreme Wind Warning',
+   'SSA': 'Storm Surge Watch',
+   'SSW': 'Storm Surge Warning',
+
+6) wav.js:
+
+   Changed: pack("V", sampleCount * this.params.channels * this.params.bitsPerSample / 8)
+
+   To: pack("V", sampleCount * this.params.channels)
+
+   This fixes a length error with iTunes where the length was reported as double
+   the real length. Other players checked are fine and ignore this.
+
+========================================================================================================================
+
+Changes:
+
+1) In wav.js now allow a frequency of 0 to create silence and also allow frequency to be
+   an array for producing DTMF tones. Also allowing decimal frequencies such as 1562.5
+   and 2083.333:
+
+   if (xtype.is(frequency, "-arr0|aar1")) {
+     for (const f of frequency) {
+       if (!xtype.is(f, "num0|num+")) {
+         paramErrors.push("frequency must be number >= 0");
+       }
+     }
+   } else if (!xtype.is(frequency, "num0|num+")) {
+     paramErrors.push("frequency must be number >= 0");
+   }
+
+2) In lib/same.js:
+
+   a) added three constants:
+
+   silence1s: [0, 1.0],
+   attentionNWS: [1050, 10.0],  // 1050Hz is played for 10 seconds
+   attentionEAS: [[853, 960], 10.0]  // 853Hz and 960HZ dual tone played for 10 seconds
+
+   b) constructMessageByteArray:
+
+   Now returns an object with the fields "msgBytes" and "header". "msgBytes" is
+   the data that was originally returned by the function and "header" is the
+   plain text message header that can be displayed with console.log().
+
+   c) generateWaveData:
+
+   Added support for repeating the header audio between 1 and 3 times (3 times is
+   the EAS standard). Added support for playing either a 1050 Hz NWS tone or
+   853/960 Hz EAS tone. Added support for appending the "NNNN" end-of-message trailer.
+
+   SAME.generateWaveData = function (byteArray, headerCount, attentionTone = undefined, tail = false) {
+     const volume = 4096;
+     const wav = new Wav({
+       channels: 2,
+       sampleRate: 44100,
+       bitsPerSample: 16
+     });
+
+     this.encodeByteArray(wav, byteArray, volume, headerCount);
+
+     if (attentionTone) {
+       // Add an EAS or NWS attention tone at the end if requested.
+       wav.append.apply(wav, [attentionTone[0], attentionTone[1], volume]);
+       // Add a one second of silence with 0Hz and zero volume
+       wav.append.apply(wav, [this.constants.silence1s[0], this.constants.silence1s[1], 0]);
+     }
+
+     // Append the EOM signal to the end of the message which consists of the
+     // preamble followed by "NNNN".
+     if (tail) {
+       byteArray = this.constants.EOM
+         .split("")
+         .map((c) => {
+           return c.charCodeAt(0);
+         });
+
+       this.encodeByteArray(wav, byteArray, volume, headerCount);
+     }
+
+     return wav.render();
+   };
+
+3) Removed need to have a "node_modules/lib" directory. All references to "lib"
+   are now in the "same-encoder" directory. Installing same-encoder on Windows
+   systems was problematic with trying to create symlinks to lib during
+   installation.
+
+4) Now supports multiple regions through an array of region objects consisting
+   of "subdiv", "stateCode" and "countyCode" properties. This fixes open issue #1
+   but breaks backward compatibility with older versions.
+
+5) Sender value is automatically padded if less than 8 characters. Fixes open
+   issue #4.
+
+6) New "encode2" function created to support additional functionality. Original
+   "encode" function works the same as it did except it includes the various
+   fixes. The multiple regions array support breaks backward compatibility with
+   this function but is the only break.
+
+  /**
+   * Encode a correctly formed SAME message, specified as an object, into a .wav
+   * file. Provides options for header repeat count and an attention tone. Returns
+   * an object containing the wav data and the header string.
+   *
+   * @param {Object} message SAME message object.
+   * @param {number} headerCount number of times to repeat SAME header audio (default: 3)
+   * @param {Array<number>} attentionTone frequency and length definition for attention tone to play. Undefined for no tone.
+   * @param {boolean} tail append the message tail "NNNN" (EOM) to the end (default: false)
+   * @returns {Object} An object containing wav data (wavData) and header (header) string.
+   */
+  SAME.encode2 = function (message, headerCount, attentionTone, tail) {...
+
+  /**
+   * Encode a correctly formed SAME message, specified as an object, into a .wav file.
+   *
+   * @param {Object} message SAME message object.
+   * @returns {string} A fully rendered SAME message in RIFF WAVE format.
+   */
+  SAME.encode = function (message) {
+    return SAME.encode2(message, 1).waveData;
+  };
