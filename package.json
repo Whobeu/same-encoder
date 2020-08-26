@@ -12,12 +12,11 @@
     "test.validate": "grunt validate",
     "demo": "grunt demo:client",
     "demo.client": "grunt demo:client",
-    "demo.server": "grunt demo:server",
-    "postinstall": "bash -c '([ ! -h node_modules/lib ] && ln -s ../lib node_modules/lib); exit 0'"
+    "demo.server": "grunt demo:server"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/aaron-em/same-encoder"
+    "url": "https://github.com/Whoebue/same-encoder2"
   },
   "keywords": [
     "EBS",
